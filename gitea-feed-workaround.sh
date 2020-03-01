@@ -1,4 +1,15 @@
 #!/bin/bash
+#
+# Copyright © 2020 Kutometa SPC, Kuwait
+#
+#  All rights reserved. Unless explicitly stated otherwise, this 
+#  program is provided AS IS with NO WARRANTY OF ANY KIND, 
+#  INCLUDING THE WARRANTY OF MERCHANTABILITY AND FITNESS FOR A 
+#  PARTICULAR PURPOSE. 
+#  
+# See accompanying documentation for more details.
+# www.ka.com.kw
+
 set -euH
 
 GITEA_HOST_URL="https://DOMAIN"         # app.ini/server/ROOT_URL   (User-visible base URL of Gitea)
@@ -36,9 +47,10 @@ GITEA_VERSION="AUTODETECT"              # Sets how gitea's database should be ac
                                         # AUTODETECT, this script will attempt to obtain this 
                                         # information by executing 'gitea --version'
 
+
 #--------------------------------------------------------------------
 
-VERSION=0.3
+VERSION=0.5
 echo "Gitea Feed Workaround Daemon
 Version $VERSION
 
@@ -70,9 +82,9 @@ escape_xml() {
     sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g; s/"/\&quot;/g; s/'"'"'/\&#39;/g'
 }
 
-update_file() {
-    if ! cmp -s "$1" "$2"; then
-        cp "$1" "$2"
+update_feed_file() {
+    if ! cmp -s "$2" "/proc/self/fd/0" < <(echo "$1") ; then
+        echo "$1" > "$2"
     fi
 }
 
@@ -109,6 +121,24 @@ inject_announcements() {
         done < <(ls "$ANNOUNCEMENT_DIR")
     fi
 }
+
+assert_dep() {
+    if ! which "$1" >/dev/null 2>/dev/null; then
+        echo "[gitea-feed-workaround] --X-- '$1' was not found. '$1' is required for this script to function. Aborting."
+        exit 1
+    fi
+}
+
+assert_dep "sqlite3"
+assert_dep "tail"
+assert_dep "head"
+assert_dep "cut"
+assert_dep "stat"
+assert_dep "xxd"
+assert_dep "sed"
+assert_dep "cmp"
+assert_dep "date"
+assert_dep "git"
 
 if [[ "$GITEA_VERSION" == "AUTODETECT" ]]; then
     GITEA_VERSION="$(gitea --version | tail -c +15 | cut -d ' ' -f 1)"
@@ -257,7 +287,7 @@ while true; do
         if [[ "$ENABLE_COMMIT_FEED" != "YES" ]] || ! git log 2> /dev/null > /dev/null ; then
             echo "[gitea-feed-workaround] --X-- Commit feed for '$RAW_REPO_OWNER/$RAW_REPO_NAME' not generated (disabled or empty git repo @ '$GITEA_REPOSITORY_PATH/$PATH_REPO_OWNER_LOWER/$PATH_REPO_NAME_LOWER.git')."
         else
-            RSS_FEED="$(mktemp)"
+            RSS_FEED_STR=""
             #ATOM_FEED="$(mktemp)"
             
             #echo "<?xml version='1.0' encoding='utf-8'?>
@@ -268,7 +298,7 @@ while true; do
             #     <id>$URL_REPOSITORY_PREFIX#commits</id>
             #" > "$ATOM_FEED"
             
-            echo "<?xml version='1.0' encoding='utf-8'?>
+            RSS_FEED_STR="<?xml version='1.0' encoding='utf-8'?>
                 <rss version='2.0'>
                     <channel>
                          <title>$(echo -n "$RAW_REPO_OWNER/$RAW_REPO_NAME Commits @ $GITEA_HOST_URL" | escape_xml)</title>
@@ -276,7 +306,7 @@ while true; do
                          <link>$URL_REPOSITORY_PREFIX</link>
                          $(gen_lastbuilddate "$(git log -1 --pretty='format:%ct')")
                          <ttl>$INTERVAL</ttl>
-            " > "$RSS_FEED"
+            "
             
             while read -d '' -r ENTRY; do
                 OIFS="$IFS"
@@ -305,25 +335,26 @@ while true; do
                 #    <summary>$XML_COMMIT_BODY</summary>
                 #</entry>"  >> "$ATOM_FEED"
                 
-                echo "<item>
+                RSS_FEED_STR="$RSS_FEED_STR
+                <item>
                     <title>$XML_COMMIT_SUBJECT ($XML_COMMIT_SHORT_HASH)</title>
                     <link>$URL_REPOSITORY_COMMIT_PREFIX/$URL_COMMIT_HASH</link>
                     <guid isPermaLink='false'>$URL_REPOSITORY_COMMIT_PREFIX/$URL_COMMIT_HASH</guid>
                     <pubDate>$XML_COMMIT_MAIL_DATE</pubDate>
                     <description>$XML_COMMIT_BODY</description>
-                </item>"  >> "$RSS_FEED"
+                </item>"
             done < <(git log -n "$MAX_NUM_OF_ENTRIES" -z --pretty="tformat:%s%x1E%H%x1E%an%x1E%aI%x1E%b" | cat)
             
-            inject_announcements >> "$RSS_FEED"
-            echo "</channel></rss>"  >> "$RSS_FEED"
+            RSS_FEED_STR="$RSS_FEED_STR$(inject_announcements)"
+            RSS_FEED_STR="$RSS_FEED_STR</channel></rss>"
+            
             #echo "</feed>"  >> "$ATOM_FEED"
             
             
             mkdir -p "$FEEDS_PATH/$PATH_REPO_OWNER_LOWER/$PATH_REPO_NAME_LOWER"
             mkdir -p "$FEEDS_PATH/$PATH_REPO_OWNER/$PATH_REPO_NAME"
-            update_file "$RSS_FEED" "$FEEDS_PATH/$PATH_REPO_OWNER/$PATH_REPO_NAME/commits.rss"
-            update_file "$RSS_FEED" "$FEEDS_PATH/$PATH_REPO_OWNER_LOWER/$PATH_REPO_NAME_LOWER/commits.rss"
-            rm "$RSS_FEED"
+            update_feed_file "$RSS_FEED_STR" "$FEEDS_PATH/$PATH_REPO_OWNER/$PATH_REPO_NAME/commits.rss"
+            update_feed_file "$RSS_FEED_STR" "$FEEDS_PATH/$PATH_REPO_OWNER_LOWER/$PATH_REPO_NAME_LOWER/commits.rss"
             echo "[gitea-feed-workaround] Regenerated commit feed for '$RAW_REPO_OWNER/$RAW_REPO_NAME' at '$FEEDS_PATH/$PATH_REPO_OWNER_LOWER/$PATH_REPO_NAME_LOWER/commits.rss'"
             #cp  "$ATOM_FEED" "$FEEDS_PATH/$PATH_REPO_OWNER/$PATH_REPO_NAME/commits.atom"
             #mv  "$ATOM_FEED" "$FEEDS_PATH/$PATH_REPO_OWNER_LOWER/$PATH_REPO_NAME_LOWER/commits.atom"
@@ -340,16 +371,16 @@ while true; do
         if [[ "$ENABLE_RELEASE_FEED" != "YES" ]]; then
             echo "[gitea-feed-workaround] --X-- Release feed for '$RAW_REPO_OWNER/$RAW_REPO_NAME' not generated (disabled)."
         else
-            RSS_FEED="$(mktemp)"
+            RSS_FEED_STR=""
             
-            echo "<?xml version='1.0' encoding='utf-8'?>
+            RSS_FEED_STR="<?xml version='1.0' encoding='utf-8'?>
                 <rss version='2.0'>
                     <channel>
                          <title>$(echo -n "$RAW_REPO_OWNER/$RAW_REPO_NAME Releases @ $GITEA_HOST_URL" | escape_xml)</title>
                          <description>$(echo -n "$RAW_REPO_DESC" | escape_xml)</description>
                          <link>$URL_REPOSITORY_PREFIX/releases</link>
                          <ttl>$INTERVAL</ttl>
-            " > "$RSS_FEED"
+            "
             
             ADDED_LAST_BUILD_TAG="0"
             while read -d "$(printf '\x1e')" -r RELEASE_LINE; do
@@ -370,26 +401,26 @@ while true; do
                 #if [[ "$RAW_RELEASE_IS_PRERELEASE" != "0" ]]; then continue; fi
                 
                 if [[ "$ADDED_LAST_BUILD_TAG" == "0" ]]; then
-                    gen_lastbuilddate "$RAW_RELEASE_DATE" >> "$RSS_FEED"  
+                    RSS_FEED_STR="$RSS_FEED_STR$(gen_lastbuilddate "$RAW_RELEASE_DATE")"  
                     ADDED_LAST_BUILD_TAG="1"
                 fi
                 
-                echo "<item>
+                RSS_FEED_STR="$RSS_FEED_STR
+                <item>
                     <title>$XML_RELEASE_TITLE ($XML_RELEASE_TAG_NAME)</title>
                     <link>$URL_REPOSITORY_PREFIX/releases#$URL_RELEASE_TAG_NAME</link>
                     <guid isPermaLink='false'>$URL_REPOSITORY_PREFIX/releases#$URL_RELEASE_TAG_NAME</guid>
                     <pubDate>$XML_RELEASE_MAIL_DATE</pubDate>
                     <description>$XML_RELEASE_NOTE</description>
-                </item>"  >> "$RSS_FEED"
+                </item>"
             done < <(query_release_list)
             
-            inject_announcements >> "$RSS_FEED"
-            echo "</channel></rss>"  >> "$RSS_FEED"
+            RSS_FEED_STR="$RSS_FEED_STR$(inject_announcements)"
+            RSS_FEED_STR="$RSS_FEED_STR</channel></rss>"
             mkdir -p "$FEEDS_PATH/$PATH_REPO_OWNER_LOWER/$PATH_REPO_NAME_LOWER"
             mkdir -p "$FEEDS_PATH/$PATH_REPO_OWNER/$PATH_REPO_NAME"
-            update_file  "$RSS_FEED" "$FEEDS_PATH/$PATH_REPO_OWNER/$PATH_REPO_NAME/releases.rss"
-            update_file  "$RSS_FEED" "$FEEDS_PATH/$PATH_REPO_OWNER_LOWER/$PATH_REPO_NAME_LOWER/releases.rss"
-            rm "$RSS_FEED"
+            update_feed_file  "$RSS_FEED_STR" "$FEEDS_PATH/$PATH_REPO_OWNER/$PATH_REPO_NAME/releases.rss"
+            update_feed_file  "$RSS_FEED_STR" "$FEEDS_PATH/$PATH_REPO_OWNER_LOWER/$PATH_REPO_NAME_LOWER/releases.rss"
             echo "[gitea-feed-workaround] Regenerated commit feed for '$RAW_REPO_OWNER/$RAW_REPO_NAME' at '$FEEDS_PATH/$PATH_REPO_OWNER_LOWER/$PATH_REPO_NAME_LOWER/releases.rss'"
         fi
         
@@ -403,16 +434,16 @@ while true; do
         if [[ "$ENABLE_ISSUE_FEED" != "YES" ]]; then
             echo "[gitea-feed-workaround] --X-- Issue feed for '$RAW_REPO_OWNER/$RAW_REPO_NAME' not generated (disabled)."
         else
-            RSS_FEED="$(mktemp)"
+            RSS_FEED_STR=""
             
-            echo "<?xml version='1.0' encoding='utf-8'?>
+            RSS_FEED_STR="<?xml version='1.0' encoding='utf-8'?>
                 <rss version='2.0'>
                     <channel>
                          <title>$(echo -n "$RAW_REPO_OWNER/$RAW_REPO_NAME Issues @ $GITEA_HOST_URL" | escape_xml)</title>
                          <description>$(echo -n "$RAW_REPO_DESC" | escape_xml)</description>
                          <link>$URL_REPOSITORY_PREFIX/issues</link>
                          <ttl>$INTERVAL</ttl>
-            " > "$RSS_FEED"
+            "
             
             ADDED_LAST_BUILD_TAG="0"
             while read -d "$(printf '\x1e')" -r ISSUE_LINE; do
@@ -430,25 +461,25 @@ while true; do
                 #<description>$XML_ISSUE_BODY</description>
                 
                 if [[ "$ADDED_LAST_BUILD_TAG" == "0" ]]; then
-                    gen_lastbuilddate "$RAW_ISSUE_DATE" >> "$RSS_FEED"  
+                    RSS_FEED_STR="$RSS_FEED_STR$(gen_lastbuilddate "$RAW_ISSUE_DATE")"  
                     ADDED_LAST_BUILD_TAG="1"
                 fi
                 
-                echo "<item>
+                RSS_FEED_STR="$RSS_FEED_STR
+                <item>
                     <title>Issue #$XML_ISSUE_INDEX: $XML_ISSUE_TITLE</title>
                     <link>$URL_REPOSITORY_PREFIX/issues/$XML_ISSUE_INDEX#$URL_NOUNCE</link>
                     <guid isPermaLink='false'>$URL_REPOSITORY_PREFIX/issues/$XML_ISSUE_INDEX#$URL_NOUNCE</guid>
                     <pubDate>$XML_ISSUE_MODIFICATION_DATE</pubDate>
-                </item>"  >> "$RSS_FEED"
+                </item>"
             done < <(query_issues_list)
             
-            inject_announcements >> "$RSS_FEED"
-            echo "</channel></rss>"  >> "$RSS_FEED"
+            RSS_FEED_STR="$RSS_FEED_STR$(inject_announcements)"
+            RSS_FEED_STR="$RSS_FEED_STR</channel></rss>"
             mkdir -p "$FEEDS_PATH/$PATH_REPO_OWNER_LOWER/$PATH_REPO_NAME_LOWER"
             mkdir -p "$FEEDS_PATH/$PATH_REPO_OWNER/$PATH_REPO_NAME"
-            update_file "$RSS_FEED" "$FEEDS_PATH/$PATH_REPO_OWNER/$PATH_REPO_NAME/issues.rss"
-            update_file "$RSS_FEED" "$FEEDS_PATH/$PATH_REPO_OWNER_LOWER/$PATH_REPO_NAME_LOWER/issues.rss"
-            rm "$RSS_FEED"
+            update_feed_file "$RSS_FEED_STR" "$FEEDS_PATH/$PATH_REPO_OWNER/$PATH_REPO_NAME/issues.rss"
+            update_feed_file "$RSS_FEED_STR" "$FEEDS_PATH/$PATH_REPO_OWNER_LOWER/$PATH_REPO_NAME_LOWER/issues.rss"
             echo "[gitea-feed-workaround] Regenerated commit feed for '$RAW_REPO_OWNER/$RAW_REPO_NAME' at '$FEEDS_PATH/$PATH_REPO_OWNER_LOWER/$PATH_REPO_NAME_LOWER/issues.rss'"
         fi
     done < <(query_repo_list)
