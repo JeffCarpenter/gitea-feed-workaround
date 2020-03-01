@@ -1,11 +1,10 @@
 Gitea Feed Workaround Script
 ============================
 
-A relatively simple workaround that generates RSS feeds for commits, releases, and 
-issues on Gitea. 
+A relatively simple workaround that generates RSS feeds for commits, 
+releases, and issues on Gitea. 
 
-FEATURES
---------
+###FEATURES
 
 - Generates feeds for commits, releases, and issues
 - Restricts feeds based on the repository visibility
@@ -13,8 +12,7 @@ FEATURES
 - Very configurable and easily modifiable
 
 
-CAVEATS
--------
+###CAVEATS
 
 - Computationally inefficient, likely will scale poorly with 
   repository count
@@ -27,8 +25,7 @@ CAVEATS
 - No localization support
 
 
-HOW TO INSTALL
---------------
+###HOW TO INSTALL
 
 1. Copy gitea-feed-workaround.sh to a persistent location.
 2. Edit the variables at the beginning of the script to reflect the 
@@ -39,16 +36,14 @@ At this point, the script should start generating feeds at the
 configured location.
 
 
-FEEDS MENU UI
--------------
+###FEEDS MENU UI
 
 If you want to add a "Feeds" tab to each repository page, copy 
 or append `extra_tabs.tmpl` to the correct location. See the comments 
 at the top of the file for more information. 
 
 
-FEED ANNOUNCEMENTS
-------------------
+###FEED ANNOUNCEMENTS
 
 This script supports arbitrary textual announcements that are 
 broadcast on all generated feeds. 
@@ -62,22 +57,19 @@ announcement is taken from the modification time of the file.
 Announcements persist until their files are removed.
 
 
-UPGRADE PATH TO NATIVE GITEA FEEDS
-----------------------------------
+###UPGRADE PATH TO NATIVE GITEA FEEDS
 
 When Gitea eventually introduces feed support, you can announce the 
 locations of the new feeds and the migration period via Feed 
 Announcements.
 
 
-SUPPORT
--------
+###SUPPORT
 
 Integration support is available. Please contact sales@ka.com.kw
 
 
-BUGS AND SOURCE CODE
---------------------
+###BUGS AND SOURCE CODE
 
 The source code of this project is maintained in a git repository 
 at code.ka.com.kw. Bug reports and features request are welcome 
@@ -86,14 +78,12 @@ there. You can visit this repository at:
     https://code.ka.com.kw/miscellaneous/gitea-feed-workaround
 
 
-LICENSE
--------
+###LICENSE
 
 Files in this repository are available under the LGPLv3.
 
 
-COPYRIGHT
----------
+###COPYRIGHT
 
 (ح) حقوق المؤلف محفوظة لشركة كوتوميتا لبرمجة وتشغيل الكمبيوتر وتصميم 
 وإدارة مواقع الإنترنت (ش.ش.و) - سنة ٢٠٢٠
