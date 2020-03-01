@@ -1,0 +1,24 @@
+<!--
+    This file adds a "feeds" menu to a repositories top navigation 
+    bar. The contents of this file should be appended to the end of 
+    custom/templates/custom/extra_tabs.tmpl. See gitea's
+    documentation about customization for more information.
+    
+    By default, the feeds menu is desinged to only show for public 
+    repositories (REPOSITORY_VISIBILITY="PUBLIC"). If you want it 
+    show on all pages or only for private repositories, modify the
+    .IsPrivate conditional block. See go's documentation for more 
+    information.
+-->
+{{ with .Repository }}
+        {{ if not .IsPrivate }}
+                <div class="ui left dropdown item">
+                        <i class="octicon octicon-rss"></i>Feeds
+                        <div class="menu">
+                                <a class="item" href="{{AppSubUrl}}/_feeds/{{.Owner.Name}}/{{.Name}}/commits.rss">Commits</a>
+                                <a class="item" href="{{AppSubUrl}}/_feeds/{{.Owner.Name}}/{{.Name}}/releases.rss">Releases</a>
+                                <a class="item" href="{{AppSubUrl}}/_feeds/{{.Owner.Name}}/{{.Name}}/issues.rss">Issues</a>
+                        </div>
+                </div>
+        {{ end }}
+{{ end }} 
