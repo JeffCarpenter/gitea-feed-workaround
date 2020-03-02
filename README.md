@@ -1,10 +1,10 @@
 Gitea Feed Workaround Script
 ============================
 
-A relatively simple workaround that generates RSS feeds for commits, 
-releases, and issues on Gitea. 
+A relatively simple workaround for generating RSS feeds that 
+represent changes to commits, releases, and issues on Gitea. 
 
-####FEATURES
+#### FEATURES
 
 - Generates feeds for commits, releases, and issues
 - Restricts feeds based on the repository visibility
@@ -12,7 +12,7 @@ releases, and issues on Gitea.
 - Very configurable and easily modifiable
 
 
-####CAVEATS
+#### CAVEATS
 
 - Computationally inefficient, likely will scale poorly with 
   repository count
@@ -21,8 +21,12 @@ releases, and issues on Gitea.
 - Only GNU/Linux was considered. 
 - No localization support
 
+#### Screenshots
 
-####HOW TO INSTALL
+![(Animated demo)](gitea-feed-workaround.webp)
+
+
+#### HOW TO INSTALL
 
 1. Copy gitea-feed-workaround.sh to a persistent location. 
 2. Edit the variables at the beginning of `gitea-feed-workaround.sh`.
@@ -38,7 +42,7 @@ located at `/_feeds/USER/REPOSITORY/{commits,issues,releases}.rss`.
 Note that the script will need a longer amount of time for larger 
 Gitea installations.
 
-####HOW IT WORKS
+#### HOW IT WORKS
 
 This script works by periodically polling Gitea's databases 
 for recent updates. These updates are then aggregated into static `.rss` 
@@ -64,14 +68,14 @@ standard. RSS was chosen in favor of ATOM due to the lack of TTL
 support in the later.
 
 
-####FEEDS MENU UI
+#### FEEDS MENU UI
 
 If you want to add a "Feeds" tab to each repository page, copy 
 or append `extra_tabs.tmpl` to the correct location. See the comments 
 at the top of the file for more information. 
 
 
-####FEED ANNOUNCEMENTS
+#### FEED ANNOUNCEMENTS
 
 Announcements are special feed entries that are pinned in all 
 generated feeds. They are derived from files stored in the 
@@ -88,20 +92,20 @@ until their source files are removed from the announcements
 directory.
 
 
-####UPGRADE PATH TO NATIVE GITEA FEEDS
+#### UPGRADE PATH TO NATIVE GITEA FEEDS
 
 When Gitea eventually introduces feed support, you can announce the 
 locations of the new feeds and the migration period via Feed 
 Announcements.
 
 
-####COMMERCIAL SUPPORT
+#### COMMERCIAL SUPPORT
 
 Commercial integration support is available. Please send inquires to 
 contact@ka.com.kw
 
 
-####BUGS AND SOURCE CODE
+#### BUGS AND SOURCE CODE
 
 The source code of this project is maintained in a git repository 
 at code.ka.com.kw. Bug reports and features request are welcome 
@@ -111,12 +115,12 @@ https://code.ka.com.kw/miscellaneous/gitea-feed-workaround
 Alternatively, you can report bugs to support@ka.com.kw
 
 
-####LICENSE
+#### LICENSE
 
 Files in this repository are available under the LGPLv3.
 
 
-####COPYRIGHT
+#### COPYRIGHT
 
 (ح) حقوق المؤلف محفوظة لشركة كوتوميتا لبرمجة وتشغيل الكمبيوتر وتصميم 
 وإدارة مواقع الإنترنت (ش.ش.و) - سنة ٢٠٢٠
