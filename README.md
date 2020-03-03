@@ -1,25 +1,30 @@
 Gitea Feed Workaround Script
 ============================
 
-A relatively simple workaround for generating RSS feeds that 
-represent changes to commits, releases, and issues on Gitea. 
+A relatively simple script for generating RSS feeds for commits, 
+releases, and issues on Gitea. 
 
 #### FEATURES
 
-- Generates feeds for commits, releases, and issues
-- Restricts feeds based on the repository visibility
-- Supports arbitrary in-band announcements 
-- Very configurable and easily modifiable
+- Generate feeds for commits, releases, and issues
+- Selectively generate feeds based on the repository visibility
+- Post in-band feed announcements 
+- Easily import all feeds in other software as OPML or plain-text
+- Configure and modify easily and freely
 
 
 #### CAVEATS
 
-- Computationally inefficient, likely will scale poorly with 
-  repository count
-- Only sqlite3-based installations are supported (other databases 
-  are possible with tinkering)
-- Only GNU/Linux was considered. 
+- Computationally inefficient; likely scales poorly with repository count and activity
+- Only sqlite3 databases are currently supported 
+- Only GNU/Linux is currently supported
 - No localization support
+
+
+#### COMPATIBILITY
+
+This script has been confirmed to work with Gitea version 1.11.0. Newer and older versions may work but are untested.
+
 
 #### Screenshots
 
@@ -28,44 +33,50 @@ represent changes to commits, releases, and issues on Gitea.
 
 #### HOW TO INSTALL
 
-1. Copy gitea-feed-workaround.sh to a persistent location. 
+1. Copy gitea-feed-workaround.sh to a persistent location.
+
 2. Edit the variables at the beginning of `gitea-feed-workaround.sh`.
    Variables should reflect the configuration of your specific gitea 
    setup.
-3. Run the script or install it as a system service.
+   
+3. Run the script or install it as a system service. The user used to 
+   run this script must have:
+   
+   * `read` access to the sqlite database file
+   * `read` access to the git repositories
+   * `read/write` access to output directories
 
-At this point, the script should start generating feeds at the 
-configured location. Assuming you've used the default FEEDS_URL 
-slug (i.e. `/_feeds/`), the feeds for USER's REPOSITORY are 
-located at `/_feeds/USER/REPOSITORY/{commits,issues,releases}.rss`.
+By default, generated files can be accessed at: 
 
-Note that the script will need a longer amount of time for larger 
-Gitea installations.
+* `/_feeds/USER/REPOSITORY/commits.rss`
+* `/_feeds/USER/REPOSITORY/issues.rss`
+* `/_feeds/USER/REPOSITORY/releases.rss`
+* `/_feeds/all/feeds.opml` (disabled by default)
+* `/_feeds/all/feeds.txt` (disabled by default)
 
 #### HOW IT WORKS
 
 This script works by periodically polling Gitea's databases 
-for recent updates. These updates are then aggregated into static `.rss` 
-files that can be hosted by Gitea's internal static server or a 
-dedicated http server.
+and git directories for recent updates. These updates are aggregated 
+into static `.rss` files and hosted by a normal HTTP web server. Gitea 
+itself can host these files by placing them in gitea's 
+`custom/public` directory.
 
-The definition of update depends on the represented resource:
+Considered updates are one of the following events:
 
-* Commits (`commits.rss`): Any new commit is considered a new update.
-* Issues (`commits.rss`): Any change to any issue is considered an 
-  update; i.e some issues may appear multiple times in a single feed.
-* Releases (`releases.rss`): Any new release or pre-release is 
-  considered an update.
-* Announcements (`*.rss`): Every announcement is considered an 
-  update.
+* Any repository commit (which appears in `commits.rss`).
+* Any change to a repository issue (which appears in `issues.rss`).
+* Any new releases (which appears in `releases.rss`).
+* Any announcement (which appears in all files mentioned above).
   
-Aside from announcements, updates are sorted from newest to oldest 
-and only a certain number of the newest updates are included in the
-final feed.
+Only a limited number of the updates are included in each 
+feed (with the exception of announcements, which are always included).
+Updates are sorted by date and only the most recent are included. 
 
-The format used to express updates is version 2.0 of the RSS 
-standard. RSS was chosen in favor of ATOM due to the lack of TTL 
-support in the later.
+The data formats used by this script:
+
+* RSS Version 2.0 for update feeds
+* OPML Version 1.0 for feed enumeration
 
 
 #### FEEDS MENU UI
@@ -91,18 +102,26 @@ Announcements are always included in every single feed. They persist
 until their source files are removed from the announcements
 directory.
 
+#### FEED ENUMERATION
+
+This script can be configured to generate a complete list of every 
+feed it generates. This list is meant to ease importing feeds in 
+other software. By setting `ENABLE_GLOBAL_FEED_LISTS` to `YES`, a 
+feeds list will be generated at `/_feeds/all/feeds.opml` and 
+`/_feeds/all/feeds.txt`.
+
 
 #### UPGRADE PATH TO NATIVE GITEA FEEDS
 
-When Gitea eventually introduces feed support, you can announce the 
-locations of the new feeds and the migration period via Feed 
-Announcements.
+When Gitea inevitably introduces feed support, you can use Feed 
+Announcements to let subscribers know about the changes and the 
+migration schedule.
 
 
 #### COMMERCIAL SUPPORT
 
-Commercial integration support is available. Please send inquires to 
-contact@ka.com.kw
+Commercial integration and development support is available. Please 
+send inquires to contact@ka.com.kw
 
 
 #### BUGS AND SOURCE CODE

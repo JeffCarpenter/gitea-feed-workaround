@@ -12,6 +12,8 @@
 
 set -euH
 
+SITE_TITLE="TITLE"                      # Short Site Title
+
 GITEA_HOST_URL="https://DOMAIN"         # app.ini/server/ROOT_URL   (User-visible base URL of Gitea)
 
 GITEA_DB_PATH="..../data/gitea.db"      # app.ini/database/PATH     (Path to Gitea's sqlite3 DB)
@@ -41,6 +43,8 @@ ENABLE_RELEASE_FEED="YES"               # Generate Release Feeds
 
 ENABLE_ISSUE_FEED="YES"                 # Generate Issue Feeds
 
+ENABLE_GLOBAL_FEED_LISTS="NO"           # Generate Global feed lists
+
 MAX_NUM_OF_ENTRIES="10"                 # Limit the number of feed entries (excluding announcements)
 
 GITEA_VERSION="AUTODETECT"              # Sets how gitea's database should be accessed. If set to
@@ -50,7 +54,7 @@ GITEA_VERSION="AUTODETECT"              # Sets how gitea's database should be ac
 
 #--------------------------------------------------------------------
 
-VERSION=0.5
+VERSION=0.7
 echo "Gitea Feed Workaround Daemon
 Version $VERSION
 
@@ -82,7 +86,7 @@ escape_xml() {
     sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g; s/"/\&quot;/g; s/'"'"'/\&#39;/g'
 }
 
-update_feed_file() {
+update_if_different() {
     if ! cmp -s "$2" "/proc/self/fd/0" < <(echo "$1") ; then
         echo "$1" > "$2"
     fi
@@ -245,6 +249,10 @@ while true; do
         sleep "$INTERVAL"m
     fi
     echo "[gitea-feed-workaround] Regenerating feeds for $GITEA_HOST_URL"
+    GLOBAL_URL_LIST=""
+    COMMIT_OPML_LIST=""
+    RELEASE_OPML_LIST=""
+    ISSUE_OPML_LIST=""
     while read -d "$(printf '\x1e')" -r REPOSITORY_LINE; do
         OIFS="$IFS"
         IFS=$(printf '\x1d')
@@ -275,7 +283,7 @@ while true; do
         
         
         if ! cd "$GITEA_REPOSITORY_PATH/$PATH_REPO_OWNER_LOWER/$PATH_REPO_NAME_LOWER.git"; then
-            echo "[gitea-feed-workaround] --X-- Ignoring '$RAW_REPO_OWNER/$RAW_REPO_NAME' because '$GITEA_REPOSITORY_PATH/$PATH_REPO_OWNER_LOWER/$PATH_REPO_NAME_LOWER.git' does not exist."
+            echo "[gitea-feed-workaround] Ignoring '$RAW_REPO_OWNER/$RAW_REPO_NAME' because '$GITEA_REPOSITORY_PATH/$PATH_REPO_OWNER_LOWER/$PATH_REPO_NAME_LOWER.git' does not exist."
             continue
         fi        
         
@@ -285,24 +293,26 @@ while true; do
         # * --------------------------------------------------------
         # ***********************************************************
         if [[ "$ENABLE_COMMIT_FEED" != "YES" ]] || ! git log 2> /dev/null > /dev/null ; then
-            echo "[gitea-feed-workaround] --X-- Commit feed for '$RAW_REPO_OWNER/$RAW_REPO_NAME' not generated (disabled or empty git repo @ '$GITEA_REPOSITORY_PATH/$PATH_REPO_OWNER_LOWER/$PATH_REPO_NAME_LOWER.git')."
+            echo "[gitea-feed-workaround] Commit feed for '$RAW_REPO_OWNER/$RAW_REPO_NAME' not generated (disabled or empty git repo @ '$GITEA_REPOSITORY_PATH/$PATH_REPO_OWNER_LOWER/$PATH_REPO_NAME_LOWER.git')."
         else
             RSS_FEED_STR=""
             #ATOM_FEED="$(mktemp)"
             
             #echo "<?xml version='1.0' encoding='utf-8'?>
             #   <feed xmlns='http://www.w3.org/2005/Atom'>
-            #     <title>$(echo "$RAW_REPO_OWNER/$RAW_REPO_NAME Commits @ $GITEA_HOST_URL" | escape_xml)</title>
+            #     <title>$(echo "$RAW_REPO_OWNER/$RAW_REPO_NAME Commits — $SITE_TITLE" | escape_xml)</title>
             #     <link href='$URL_REPOSITORY_PREFIX'/>
             #     <updated>$(git log -1 --pretty='format:%cI')</updated>
             #     <id>$URL_REPOSITORY_PREFIX#commits</id>
             #" > "$ATOM_FEED"
+            XML_FEED_TITLE="$(echo -n "$RAW_REPO_OWNER/$RAW_REPO_NAME Commits — $SITE_TITLE" | escape_xml)"
+            XML_FEED_DESC="$(echo -n "$RAW_REPO_DESC" | escape_xml)"
             
             RSS_FEED_STR="<?xml version='1.0' encoding='utf-8'?>
                 <rss version='2.0'>
                     <channel>
-                         <title>$(echo -n "$RAW_REPO_OWNER/$RAW_REPO_NAME Commits @ $GITEA_HOST_URL" | escape_xml)</title>
-                         <description>$(echo -n "$RAW_REPO_DESC" | escape_xml)</description>
+                         <title>$XML_FEED_TITLE</title>
+                         <description>$XML_FEED_DESC</description>
                          <link>$URL_REPOSITORY_PREFIX</link>
                          $(gen_lastbuilddate "$(git log -1 --pretty='format:%ct')")
                          <ttl>$INTERVAL</ttl>
@@ -353,8 +363,18 @@ while true; do
             
             mkdir -p "$FEEDS_PATH/$PATH_REPO_OWNER_LOWER/$PATH_REPO_NAME_LOWER"
             mkdir -p "$FEEDS_PATH/$PATH_REPO_OWNER/$PATH_REPO_NAME"
-            update_feed_file "$RSS_FEED_STR" "$FEEDS_PATH/$PATH_REPO_OWNER/$PATH_REPO_NAME/commits.rss"
-            update_feed_file "$RSS_FEED_STR" "$FEEDS_PATH/$PATH_REPO_OWNER_LOWER/$PATH_REPO_NAME_LOWER/commits.rss"
+            update_if_different "$RSS_FEED_STR" "$FEEDS_PATH/$PATH_REPO_OWNER/$PATH_REPO_NAME/commits.rss"
+            update_if_different "$RSS_FEED_STR" "$FEEDS_PATH/$PATH_REPO_OWNER_LOWER/$PATH_REPO_NAME_LOWER/commits.rss"
+            COMMIT_OPML_LIST="$COMMIT_OPML_LIST
+                <outline title='$XML_FEED_TITLE' 
+                         text='$XML_FEED_TITLE' 
+                         description='$XML_FEED_DESC' 
+                         type='rss' 
+                         xmlUrl='$FEEDS_URL/$PATH_REPO_OWNER/$PATH_REPO_NAME/commits.rss' 
+                         htmlUrl='$URL_REPOSITORY_PREFIX'/>
+            "
+            GLOBAL_URL_LIST="$GLOBAL_URL_LIST
+                             $FEEDS_URL/$PATH_REPO_OWNER/$PATH_REPO_NAME/commits.rss"
             echo "[gitea-feed-workaround] Regenerated commit feed for '$RAW_REPO_OWNER/$RAW_REPO_NAME' at '$FEEDS_PATH/$PATH_REPO_OWNER_LOWER/$PATH_REPO_NAME_LOWER/commits.rss'"
             #cp  "$ATOM_FEED" "$FEEDS_PATH/$PATH_REPO_OWNER/$PATH_REPO_NAME/commits.atom"
             #mv  "$ATOM_FEED" "$FEEDS_PATH/$PATH_REPO_OWNER_LOWER/$PATH_REPO_NAME_LOWER/commits.atom"
@@ -369,16 +389,20 @@ while true; do
         # ***********************************************************
         
         if [[ "$ENABLE_RELEASE_FEED" != "YES" ]]; then
-            echo "[gitea-feed-workaround] --X-- Release feed for '$RAW_REPO_OWNER/$RAW_REPO_NAME' not generated (disabled)."
+            echo "[gitea-feed-workaround] Release feed for '$RAW_REPO_OWNER/$RAW_REPO_NAME' not generated (disabled)."
         else
             RSS_FEED_STR=""
             
+            XML_FEED_TITLE="$(echo -n "$RAW_REPO_OWNER/$RAW_REPO_NAME Releases — $SITE_TITLE" | escape_xml)"
+            XML_FEED_DESC="$(echo -n "$RAW_REPO_DESC" | escape_xml)"
+            XML_FEED_HOME_URL="$URL_REPOSITORY_PREFIX/releases"
+                         
             RSS_FEED_STR="<?xml version='1.0' encoding='utf-8'?>
                 <rss version='2.0'>
                     <channel>
-                         <title>$(echo -n "$RAW_REPO_OWNER/$RAW_REPO_NAME Releases @ $GITEA_HOST_URL" | escape_xml)</title>
-                         <description>$(echo -n "$RAW_REPO_DESC" | escape_xml)</description>
-                         <link>$URL_REPOSITORY_PREFIX/releases</link>
+                         <title>$XML_FEED_TITLE</title>
+                         <description>$XML_FEED_DESC</description>
+                         <link>$XML_FEED_HOME_URL</link>
                          <ttl>$INTERVAL</ttl>
             "
             
@@ -419,8 +443,18 @@ while true; do
             RSS_FEED_STR="$RSS_FEED_STR</channel></rss>"
             mkdir -p "$FEEDS_PATH/$PATH_REPO_OWNER_LOWER/$PATH_REPO_NAME_LOWER"
             mkdir -p "$FEEDS_PATH/$PATH_REPO_OWNER/$PATH_REPO_NAME"
-            update_feed_file  "$RSS_FEED_STR" "$FEEDS_PATH/$PATH_REPO_OWNER/$PATH_REPO_NAME/releases.rss"
-            update_feed_file  "$RSS_FEED_STR" "$FEEDS_PATH/$PATH_REPO_OWNER_LOWER/$PATH_REPO_NAME_LOWER/releases.rss"
+            update_if_different  "$RSS_FEED_STR" "$FEEDS_PATH/$PATH_REPO_OWNER/$PATH_REPO_NAME/releases.rss"
+            update_if_different  "$RSS_FEED_STR" "$FEEDS_PATH/$PATH_REPO_OWNER_LOWER/$PATH_REPO_NAME_LOWER/releases.rss"
+            RELEASE_OPML_LIST="$RELEASE_OPML_LIST
+                <outline title='$XML_FEED_TITLE' 
+                         text='$XML_FEED_TITLE' 
+                         description='$XML_FEED_DESC' 
+                         type='rss' 
+                         xmlUrl='$FEEDS_URL/$PATH_REPO_OWNER/$PATH_REPO_NAME/releases.rss' 
+                         htmlUrl='$XML_FEED_HOME_URL'/>
+            "
+            GLOBAL_URL_LIST="$GLOBAL_URL_LIST
+                             $FEEDS_URL/$PATH_REPO_OWNER/$PATH_REPO_NAME/releases.rss"
             echo "[gitea-feed-workaround] Regenerated commit feed for '$RAW_REPO_OWNER/$RAW_REPO_NAME' at '$FEEDS_PATH/$PATH_REPO_OWNER_LOWER/$PATH_REPO_NAME_LOWER/releases.rss'"
         fi
         
@@ -432,16 +466,20 @@ while true; do
         # ***********************************************************
         
         if [[ "$ENABLE_ISSUE_FEED" != "YES" ]]; then
-            echo "[gitea-feed-workaround] --X-- Issue feed for '$RAW_REPO_OWNER/$RAW_REPO_NAME' not generated (disabled)."
+            echo "[gitea-feed-workaround] Issue feed for '$RAW_REPO_OWNER/$RAW_REPO_NAME' not generated (disabled)."
         else
             RSS_FEED_STR=""
+            
+            XML_FEED_TITLE="$(echo -n "$RAW_REPO_OWNER/$RAW_REPO_NAME Issues — $SITE_TITLE" | escape_xml)"
+            XML_FEED_DESC="$(echo -n "$RAW_REPO_DESC" | escape_xml)"
+            XML_FEED_HOME_URL="$URL_REPOSITORY_PREFIX/issues"
             
             RSS_FEED_STR="<?xml version='1.0' encoding='utf-8'?>
                 <rss version='2.0'>
                     <channel>
-                         <title>$(echo -n "$RAW_REPO_OWNER/$RAW_REPO_NAME Issues @ $GITEA_HOST_URL" | escape_xml)</title>
-                         <description>$(echo -n "$RAW_REPO_DESC" | escape_xml)</description>
-                         <link>$URL_REPOSITORY_PREFIX/issues</link>
+                         <title>$XML_FEED_TITLE</title>
+                         <description>$XML_FEED_DESC</description>
+                         <link>$XML_FEED_HOME_URL</link>
                          <ttl>$INTERVAL</ttl>
             "
             
@@ -478,10 +516,39 @@ while true; do
             RSS_FEED_STR="$RSS_FEED_STR</channel></rss>"
             mkdir -p "$FEEDS_PATH/$PATH_REPO_OWNER_LOWER/$PATH_REPO_NAME_LOWER"
             mkdir -p "$FEEDS_PATH/$PATH_REPO_OWNER/$PATH_REPO_NAME"
-            update_feed_file "$RSS_FEED_STR" "$FEEDS_PATH/$PATH_REPO_OWNER/$PATH_REPO_NAME/issues.rss"
-            update_feed_file "$RSS_FEED_STR" "$FEEDS_PATH/$PATH_REPO_OWNER_LOWER/$PATH_REPO_NAME_LOWER/issues.rss"
+            update_if_different "$RSS_FEED_STR" "$FEEDS_PATH/$PATH_REPO_OWNER/$PATH_REPO_NAME/issues.rss"
+            update_if_different "$RSS_FEED_STR" "$FEEDS_PATH/$PATH_REPO_OWNER_LOWER/$PATH_REPO_NAME_LOWER/issues.rss"
+            ISSUE_OPML_LIST="$ISSUE_OPML_LIST
+                <outline title='$XML_FEED_TITLE' 
+                         text='$XML_FEED_TITLE' 
+                         description='$XML_FEED_DESC' 
+                         type='rss' 
+                         xmlUrl='$FEEDS_URL/$PATH_REPO_OWNER/$PATH_REPO_NAME/issues.rss' 
+                         htmlUrl='$XML_FEED_HOME_URL'/>
+            "
+            GLOBAL_URL_LIST="$GLOBAL_URL_LIST
+                             $FEEDS_URL/$PATH_REPO_OWNER/$PATH_REPO_NAME/issues.rss"
             echo "[gitea-feed-workaround] Regenerated commit feed for '$RAW_REPO_OWNER/$RAW_REPO_NAME' at '$FEEDS_PATH/$PATH_REPO_OWNER_LOWER/$PATH_REPO_NAME_LOWER/issues.rss'"
         fi
     done < <(query_repo_list)
+    
+    if [[ "$ENABLE_GLOBAL_FEED_LISTS" != "YES" ]]; then
+        echo "[gitea-feed-workaround] Global RSS OMPL is disabled."
+    else
+        OPML_LIST="<?xml version='1.0'?>
+            <opml version='1.0'>
+                <head>
+                    <title>$SITE_TITLE</title>
+                </head>
+                <body>
+                    <outline title='$SITE_TITLE Commits'  text='$SITE_TITLE Commits'  description='$SITE_TITLE Commits'  type='folder'>$COMMIT_OPML_LIST</outline>
+                    <outline title='$SITE_TITLE Releases' text='$SITE_TITLE Releases' description='$SITE_TITLE Releases' type='folder'>$RELEASE_OPML_LIST</outline>
+                    <outline title='$SITE_TITLE Issues'   text='$SITE_TITLE Issues'   description='$SITE_TITLE Issues'   type='folder'>$ISSUE_OPML_LIST</outline>
+                </body>
+            </opml>"
+        mkdir -p "$FEEDS_PATH/all"
+        update_if_different "$OPML_LIST"       "$FEEDS_PATH/all/feeds.opml"
+        update_if_different "$(echo "$GLOBAL_URL_LIST" | awk '{$1=$1};1' | sed '/^$/d')" "$FEEDS_PATH/all/feeds.txt"
+    fi
 done
 
