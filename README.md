@@ -33,7 +33,7 @@ This script has been confirmed to work with Gitea version 1.11.0. Newer and olde
 
 #### HOW TO INSTALL
 
-1. Copy gitea-feed-workaround.sh to a persistent location.
+1. Copy `gitea-feed-workaround.sh` to a persistent location.
 
 2. Edit the variables at the beginning of `gitea-feed-workaround.sh`.
    Variables should reflect the configuration of your specific gitea 
@@ -90,7 +90,7 @@ at the top of the file for more information.
 
 Announcements are special feed entries that are pinned in all 
 generated feeds. They are derived from files stored in the 
-announcements directory (ANNOUNCEMENT_DIR):
+announcements directory `ANNOUNCEMENT_DIR`:
 
 * The title of the announcement is derived from the name of the file. 
 * The content of the announcement are derived from the content of 
