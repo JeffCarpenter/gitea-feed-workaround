@@ -4,6 +4,8 @@ Gitea Feed Workaround Script
 A relatively simple script for generating RSS feeds for commits, 
 releases, and issues on Gitea. 
 
+Forked from [code.ka.com.kw/miscellaneous/gitea-feed-workaround](https://code.ka.com.kw/miscellaneous/gitea-feed-workaround)
+
 #### FEATURES
 
 - Generate feeds for commits, releases, and issues
